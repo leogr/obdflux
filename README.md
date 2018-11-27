@@ -47,6 +47,9 @@ Example:
 ./obdflux --test=true --debug=true
 ```
 
+## Demo
+![Test drive](docs/demo.png)
+
 ## License
 MIT
 
