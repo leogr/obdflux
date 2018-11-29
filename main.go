@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/influxdata/influxdb/client/v2"
@@ -73,13 +75,19 @@ func main() {
 	}, os.Getenv("DB_DATABASE"), os.Getenv("DB_MEASUREMENT"))
 	if err != nil {
 		fmt.Println("Failed to connect to InfluxDB: ", err)
+		return
 	}
 	defer db.Close()
 
-	fmt.Println("Reading...")
+	// Make signals channels for graceful exit
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+
+	fmt.Println("Starting...")
+
+	// Make OBD scanner and start collecting data
 	obdScanner := NewOBDScanner(dev, commands, time.Microsecond*100, 10)
 	go obdScanner.Start()
-	defer obdScanner.Stop()
 
 	for {
 		select {
@@ -91,9 +99,12 @@ func main() {
 			if err != nil {
 				fmt.Println("Writing error: ", err)
 			}
+		case <-sigs:
+			fmt.Println("Exiting...")
+			obdScanner.Stop()
+			return
 		}
 	}
-
 }
 
 func getDevice(devicePath string, debug bool, testDev bool) (*elmobd.Device, error) {

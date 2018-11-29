@@ -39,7 +39,7 @@ func NewOBDScanner(dev *elmobd.Device, cmds []elmobd.OBDCommand, sleep time.Dura
 		cmds,
 		sleep,
 		make(chan Measurement, capacity),
-		make(chan struct{}),
+		make(chan struct{}, 1),
 	}
 }
 
@@ -49,38 +49,36 @@ func (o *OBDScanner) Measurements() <-chan Measurement {
 
 func (o *OBDScanner) Start() {
 	for {
-
 		select {
 		case <-o.stop:
 			return
 		default:
-		}
+			values := map[string]interface{}{}
+			errors := map[string]string{}
 
-		values := map[string]interface{}{}
-		errors := map[string]string{}
+			for _, cmd := range o.cmds {
+				cmdRes, cmdErr := o.dev.RunOBDCommand(cmd)
 
-		for _, cmd := range o.cmds {
-			cmdRes, cmdErr := o.dev.RunOBDCommand(cmd)
-
-			if cmdErr != nil {
-				errors["err_"+cmdRes.Key()] = cmdErr.Error()
-			} else {
-				f, err := strconv.ParseFloat(cmdRes.ValueAsLit(), 64)
-				if err != nil {
-					values[cmdRes.Key()] = cmdRes.ValueAsLit()
+				if cmdErr != nil {
+					errors["err_"+cmdRes.Key()] = cmdErr.Error()
 				} else {
-					values[cmdRes.Key()] = f
+					f, err := strconv.ParseFloat(cmdRes.ValueAsLit(), 64)
+					if err != nil {
+						values[cmdRes.Key()] = cmdRes.ValueAsLit()
+					} else {
+						values[cmdRes.Key()] = f
+					}
 				}
 			}
-		}
 
-		o.ch <- &OBDMeasurement{
-			time.Now(),
-			values,
-			errors,
-		}
+			o.ch <- &OBDMeasurement{
+				time.Now(),
+				values,
+				errors,
+			}
 
-		time.Sleep(o.sleep)
+			time.Sleep(o.sleep)
+		}
 	}
 }
 
