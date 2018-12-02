@@ -18,7 +18,17 @@ GO111MODULE=on go build
 docker-compose up -d
 ```
 
-Then, create the `.env` file:
+Once your InfluxDB is up and running, create a new database by running:
+
+```
+docker-compose run influxdb-cli
+``` 
+then
+```
+CREATE DATABASE obdflux
+```
+
+Finally, create the `.env` file:
 ```
 cp .env.example .env
 ```
