@@ -11,6 +11,7 @@ import (
 
 	"github.com/influxdata/influxdb/client/v2"
 	"github.com/joho/godotenv"
+	"github.com/leogr/obdflux/pkg/obd"
 	"github.com/rzetterberg/elmobd"
 )
 
@@ -86,22 +87,21 @@ func main() {
 	fmt.Println("Starting...")
 
 	// Make OBD scanner and start collecting data
-	obdScanner := NewOBDScanner(dev, commands, time.Microsecond*100, 10)
-	go obdScanner.Start()
+	scanner := obd.NewScanner(dev, commands, time.Microsecond*100, 100)
+	c := scanner.C()
 
 	for {
 		select {
-		case m := <-obdScanner.Measurements():
-			err = db.Write(m.Errors(), m.Values(), m.Time())
+		case ms := <-c:
 			if *debug {
-				fmt.Println(m.Time(), m.Values(), m.Errors())
+				fmt.Println(ms)
 			}
-			if err != nil {
+			if err := db.Write(ms); err != nil {
 				fmt.Println("Writing error: ", err)
 			}
 		case <-sigs:
 			fmt.Println("Exiting...")
-			obdScanner.Stop()
+			scanner.Stop()
 			return
 		}
 	}

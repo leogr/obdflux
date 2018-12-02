@@ -1,7 +1,9 @@
 package main
 
 import (
-	"time"
+	"fmt"
+
+	"github.com/leogr/obdflux/pkg/obd"
 
 	"github.com/influxdata/influxdb/client/v2"
 )
@@ -29,18 +31,36 @@ func NewDBClient(conf client.HTTPConfig, db string, measurement string) (*DBClie
 	}, nil
 }
 
-func (d *DBClient) Write(tags map[string]string, fields map[string]interface{}, time time.Time) error {
+func (d *DBClient) Write(ms []obd.Measurement) error {
 	bps, err := client.NewBatchPoints(d.bpCfg)
 	if err != nil {
 		return err
 	}
 
-	p, err := client.NewPoint(d.measurement, tags, fields, time)
-	if err != nil {
-		return err
+	for _, m := range ms {
+		tags := map[string]string{
+			"mode": fmt.Sprintf("%02X", m.ModeID),
+			"PID":  fmt.Sprintf("%02X", m.ParameterID),
+		}
+		fields := map[string]interface{}{}
+		if m.Err != nil {
+			tags["msg"] = m.Err.Error()
+			fields["err"] = true
+		} else {
+			fields[m.Key] = m.Value
+		}
+		p, err := client.NewPoint(
+			d.measurement,
+			tags,
+			fields,
+			m.Time,
+		)
+		if err != nil {
+			return err
+		}
+		bps.AddPoint(p)
 	}
 
-	bps.AddPoint(p)
 	return d.client.Write(bps)
 }
 
